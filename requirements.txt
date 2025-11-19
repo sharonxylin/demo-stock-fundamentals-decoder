@@ -1,0 +1,6 @@
+streamlit
+yfinance
+openai>=1.40.0
+plotly
+requests
+fpdf
