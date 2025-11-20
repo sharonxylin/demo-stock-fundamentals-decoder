@@ -1,8 +1,15 @@
 import streamlit as st
+import pandas as pd
+import plotly.express as px
 from services.ai_service import generate_company_insights
 from services.utils import PDF_SUPPORTED, build_pdf
 from services.company_profile import build_company_profile
 from services.fundamentals import build_pdf_context, compute_fundamentals
+from services.portfolio_composition import (
+    FundCompositionUnavailableError,
+    InvalidFundTickerError,
+    fetch_portfolio_composition,
+)
 from services.ticker_service import (
     INDEX_FUND_MESSAGE,
     INVALID_TICKER_MESSAGE,
@@ -50,8 +57,6 @@ def _render_query_form():
     """Render the hero inputs and return ticker/model/submit state."""
     left_pad, center_column, right_pad = st.columns([1, 2, 1])
     with center_column:
-        st.title("📈 Stock Fundamentals Decoder")
-        st.write("For index fund investors curious about individual companies")
         query = st.text_input(
             "Enter stock ticker (e.g., AAPL, MSFT) (NYSE tickers only):",
             key="company_query_input",
@@ -155,7 +160,6 @@ def _display_insights(profile, fundamentals, selected_model, placeholder):
         )
     return insights_text
 
-
 def _render_pdf_controls(
     container,
     profile,
@@ -215,8 +219,9 @@ def _render_analysis(profile, fundamentals, stock, selected_model):
     )
     return True
 
-def main():
-    configure_page()
+
+def _render_company_analysis_tab():
+    """Render the Company Analysis tab."""
     ticker, selected_model, learn_clicked = _render_query_form()
     footer_rendered = False
 
@@ -238,6 +243,109 @@ def main():
 
     if not footer_rendered:
         render_footer()
+
+
+def _render_portfolio_holdings(composition) -> None:
+    """Render the holdings table for the fund composition tab."""
+    st.markdown(
+        f"**Top holdings for {composition.fund_name} ({composition.fund_symbol})**"
+    )
+
+    top_holdings = composition.holdings[:15]
+    pie_rows = []
+    for idx, holding in enumerate(top_holdings):
+        label = holding.symbol or holding.name or f"Holding {idx + 1}"
+        pie_rows.append({"label": label, "percent": max(holding.percent, 0.0)})
+
+    total_percent = sum(row["percent"] for row in pie_rows)
+    remaining = max(0.0, 100.0 - total_percent)
+    if remaining > 0.01:
+        pie_rows.append({"label": "Others", "percent": remaining})
+
+    chart_total = sum(row["percent"] for row in pie_rows)
+    if chart_total > 0:
+        fig = px.pie(
+            pie_rows,
+            names="label",
+            values="percent",
+            hole=0.35,
+            color="label",
+            color_discrete_map={"Others": "#f2f2f2"},
+        )
+        fig.update_traces(textposition="inside", textinfo="percent+label")
+        fig.update_layout(margin=dict(l=10, r=10, t=10, b=10), showlegend=False)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Holdings percentages are missing; pie chart not available.")
+
+    records = [
+        {
+            "Symbol": holding.symbol or "—",
+            "Name": holding.name or "—",
+            "Portfolio %": holding.percent_display,
+        }
+        for holding in composition.holdings
+    ]
+    df = pd.DataFrame(records)
+    editor_state_key = "holdings_table_editor"
+    st.data_editor(
+        df,
+        hide_index=True,
+        use_container_width=True,
+        disabled=True,
+        key=editor_state_key,
+    )
+
+    selection_state = st.session_state.get(editor_state_key, {})
+    selected_rows = selection_state.get("selection", {}).get("rows", []) if isinstance(selection_state, dict) else []
+    last_handled_row = st.session_state.get("last_handled_holding_row")
+    if selected_rows:
+        selected_idx = selected_rows[-1]
+        if selected_idx != last_handled_row and 0 <= selected_idx < len(composition.holdings):
+            st.session_state["last_handled_holding_row"] = selected_idx
+            target_ticker = (composition.holdings[selected_idx].symbol or "").strip().upper()
+            if target_ticker:
+                st.session_state["company_query_input"] = target_ticker
+                st.session_state["auto_learn_submit"] = True
+                st.experimental_rerun()
+
+
+def _render_portfolio_tab():
+    """Render the Portfolio Composition tab."""
+    st.write("Enter an index fund, ETF, or mutual fund ticker to view its reported holdings.")
+    fund_ticker = st.text_input(
+        "Fund ticker:",
+        key="fund_composition_ticker",
+        placeholder="VOO",
+    )
+    show_composition = st.button("Show Portfolio Composition")
+
+    if show_composition:
+        if not fund_ticker:
+            st.warning("Please enter a fund ticker.")
+            return
+        try:
+            composition = fetch_portfolio_composition(fund_ticker)
+            _render_portfolio_holdings(composition)
+        except InvalidFundTickerError as exc:
+            st.warning(str(exc) or "This ticker does not look like an ETF or mutual fund.")
+        except FundCompositionUnavailableError as exc:
+            st.error(str(exc) or "Could not retrieve holdings for this fund.")
+        except Exception as exc:
+            st.error(f"Unexpected error: {exc}")
+
+    render_footer()
+
+
+def main():
+    configure_page()
+    st.title("📈 Stock Fundamentals Decoder")
+    st.write("For index fund investors curious about individual companies")
+    company_tab, portfolio_tab = st.tabs(["🏢 Company Analysis", "📊 Portfolio Composition"])
+    with company_tab:
+        _render_company_analysis_tab()
+    with portfolio_tab:
+        _render_portfolio_tab()
 
 
 if __name__ == "__main__":
