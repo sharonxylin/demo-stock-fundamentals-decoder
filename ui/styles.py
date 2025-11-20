@@ -46,16 +46,11 @@ body,
     margin-top: auto;
     padding: 1.25rem 0 2rem;
     text-align: center;
-    color: #6c6c6c;
-}
-.app-footer hr {
-    margin: 0 0 1rem;
-    border: none;
-    border-top: 1px solid #e2e2e2;
+    color: #e9e9e9;
 }
 .footer-disclaimer {
     font-size: 0.78rem;
-    color: #7a7a7a;
+    color: #e5e5e5;
     line-height: 1.45;
     margin-top: 0.75rem;
 }
@@ -95,7 +90,7 @@ body,
 
 def configure_page() -> None:
     """Apply Streamlit layout settings and shared CSS."""
-    st.set_page_config(layout="wide")
+    st.set_page_config(page_title="Stock Fundamentals Decoder", page_icon="📈", layout="wide")
     st.markdown(BASE_STYLES, unsafe_allow_html=True)
 
 

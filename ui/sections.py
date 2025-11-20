@@ -11,6 +11,18 @@ from services.company_profile import CompanyProfile
 from services.constants import DISCLAIMER_TEXT
 from services.fundamentals import FundamentalsSnapshot
 
+_SUMMARY_PLACEHOLDER_KEY = "_company_summary_placeholder"
+
+
+def _escape_html(text: str) -> str:
+    """Basic HTML escaping for summaries rendered via markdown."""
+    return (
+        text.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#39;")
+    )
 
 def render_company_identity(profile: CompanyProfile) -> None:
     """Display the company logo, name, and metadata."""
@@ -209,7 +221,28 @@ def render_fundamentals_section(snapshot: FundamentalsSnapshot) -> None:
 
 def render_company_summary(profile: CompanyProfile) -> None:
     """Show the long business summary."""
-    st.caption(f"Company Summary: {profile.summary}")
+    summary_text = profile.summary.strip() if profile.summary else "N/A"
+    previous_placeholder = st.session_state.get(_SUMMARY_PLACEHOLDER_KEY)
+    if previous_placeholder is not None:
+        previous_placeholder.empty()
+
+    placeholder = st.empty()
+    st.session_state[_SUMMARY_PLACEHOLDER_KEY] = placeholder
+    escaped_summary = _escape_html(summary_text)
+    formatted_summary = escaped_summary.replace("\n", "<br/>")
+    placeholder.markdown(
+        f"""
+        <div style="margin-top:1.25rem;">
+            <div style="font-size:0.78rem; color:#8a8a8a; text-transform:uppercase; letter-spacing:0.03em; margin-bottom:0.35rem;">
+                Company summary
+            </div>
+            <div style="font-size:0.85rem; color:#5f6368; line-height:1.5;">
+                {formatted_summary}
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def render_footer() -> None:

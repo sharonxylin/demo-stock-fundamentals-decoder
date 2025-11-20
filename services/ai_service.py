@@ -1,7 +1,6 @@
 """OpenAI chat helper for generating fundamentals insights."""
 import os
 from typing import Optional
-
 from openai import OpenAI
 
 
@@ -91,7 +90,7 @@ def generate_company_insights(
     market_cap: str,
     dividend_yield: str,
     beta: str,
-    model: str = "gpt-5-mini",
+    model: str = "gpt-5",
 ) -> str:
     """Call the OpenAI Chat Completions API and return the generated insights."""
     client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
